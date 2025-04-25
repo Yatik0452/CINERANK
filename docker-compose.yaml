@@ -1,0 +1,9 @@
+version: '3.8'
+services:
+  web:
+    build: .
+    ports:
+      - "8000:80"  # Maps port 80 in the container to port 8000 on the host
+    env_file:
+      - .env
+    
