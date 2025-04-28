@@ -1,6 +1,5 @@
 // const api_url = "http://127.0.0.1:8000"
 const api_url = "https://etl-tutorial.onrender.com"
-// const api_url = "https://test-etl-1-0-0.onrender.com"
 
 async function login(event) {
     event.preventDefault();

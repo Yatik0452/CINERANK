@@ -16,7 +16,7 @@ password = os.environ.get('PASSWORD')
 server = os.environ.get('SERVER')
 database = os.environ.get('DATABASE')
 account_storage = os.environ.get('ACCOUNT_STORAGE')
-# connect_str = os.getenv('AZURE_STORAGE_CONNECTION_STRING')
+connect_str = os.getenv('AZURE_STORAGE_CONNECTION_STRING')
 
 # Using pyodbc
 engine = create_engine(f'mssql+pyodbc://{username}:{password}@{server}/{database}?driver=ODBC+Driver+18+for+SQL+Server')
@@ -26,8 +26,8 @@ class AzureDB():
         self.local_path = local_path
         self.account_url = f"https://{account_storage}.blob.core.windows.net"
         self.default_credential = DefaultAzureCredential()
-        # self.blob_service_client = BlobServiceClient.from_connection_string(connect_str)
-        self.blob_service_client = BlobServiceClient(self.account_url, credential=self.default_credential)
+        self.blob_service_client = BlobServiceClient.from_connection_string(connect_str)
+        # self.blob_service_client = BlobServiceClient(self.account_url, credential=self.default_credential)
         
     def access_container(self, container_name): 
         # Use this function to create/access a new container
