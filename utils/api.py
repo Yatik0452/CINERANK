@@ -73,7 +73,7 @@ users_db = {
 
 # SQL database access
 database=AzureDB()
-database.access_container("example-data")
+database.access_container("csv-files")
 
 class Token(BaseModel):
     access_token: str
