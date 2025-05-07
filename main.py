@@ -4,6 +4,7 @@ from azure.storage.blob import BlobServiceClient, BlobClient, ContainerClient
 from dotenv import load_dotenv
 from utils.datasetup import *
 from utils.dimension_classes import *
+from utils.tmdb_csv_uploader import *
 
 class MainETL():
     # List of columns need to be replaced
@@ -11,7 +12,7 @@ class MainETL():
         self.drop_columns = []
         self.dimension_tables = []
         
-    def extract(self, csv_file="ETL_Example_Data.csv"):
+    def extract(self, csv_file: str):
         # Step 1: Extract: use pandas read_csv to open the csv file and extract data
         print(f'Step 1: Extracting data from csv file')
         self.fact_table = df
@@ -124,7 +125,7 @@ class MainETL():
         
     def mainLoop(self):    
         # Step 1
-        self.extract()
+        self.extract("ETL_Example_Data.csv")
         # Step 2
         self.transform()
         # Step 3
@@ -136,8 +137,24 @@ class MainETL():
         
 def main():
     # create an instance of MainETL
-    main = MainETL()
-    main.mainLoop()
+    # main = MainETL()
+    # main.mainLoop()
+
+    print("running main..")
+    # Generate TMDB CSV
+    # imdb_id_list = APICSVUploader.retrieve_imdb_ids()
+    # APICSVUploader.generate_tmdb_csv(imdb_id_list)
+
+    # Upload local csv files to Azure blob storage
+    # database = AzureDB()
+    # print("running access container..")
+    # database.access_container("csv-files")
+    # print("running upload blob..")
+    # database.upload_blob("tmdb_dataset.csv")
+    # database.upload_blob("imdb_movie_records.csv")
+    # database.upload_blob("imdb_dataset.csv")
+
+
     
 if __name__ == '__main__':
     main()
