@@ -17,6 +17,7 @@ server = os.environ.get('SERVER')
 database = os.environ.get('DATABASE')
 account_storage = os.environ.get('ACCOUNT_STORAGE')
 connect_str = os.getenv('AZURE_STORAGE_CONNECTION_STRING')
+tmdb_api_token = os.getenv('TMDB_API_READ_ACCESS_TOKEN')
 
 # Using pyodbc
 engine = create_engine(f'mssql+pyodbc://{username}:{password}@{server}/{database}?driver=ODBC+Driver+18+for+SQL+Server')
@@ -88,7 +89,8 @@ class AzureDB():
         try:
             print(f"Acessing blob {blob_name}")
             
-            df = pd.read_csv(io.StringIO(self.container_client.download_blob(blob_name).readall().decode('utf-8')))  
+            # df = pd.read_csv(io.StringIO(self.container_client.download_blob(blob_name).readall().decode('utf-8', errors='replace'))) #swap out chars that can't be decoded with a replacement char
+            df = pd.read_csv(io.StringIO(self.container_client.download_blob(blob_name).readall().decode('utf-8', errors='ignore')))  #ignore chars that can't be decoded
             return df      
         except Exception as ex:
             print('Exception:')
