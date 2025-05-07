@@ -61,7 +61,7 @@ class AzureDB():
         else:
             # Upload the created file
             with open(file=upload_file_path, mode="rb") as data:
-                blob_client.upload_blob(data)
+                blob_client.upload_blob(data, overwrite=True)
                 
     def list_blobs(self):
         print("\nListing blobs...")
