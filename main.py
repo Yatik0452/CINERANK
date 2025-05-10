@@ -141,9 +141,12 @@ def main():
     # main.mainLoop()
 
     print("running main..")
-    # Generate TMDB CSV
+    # Generate TMDb CSV
     # imdb_id_list = APICSVUploader.retrieve_imdb_ids()
     # APICSVUploader.generate_tmdb_csv(imdb_id_list)
+
+    #Generate TMDb Genre List
+    # APICSVUploader.generate_tmdb_movie_csv()
 
     # Upload local csv files to Azure blob storage
     # database = AzureDB()
@@ -151,8 +154,9 @@ def main():
     # database.access_container("csv-files")
     # print("running upload blob..")
     # database.upload_blob("tmdb_dataset.csv")
-    # database.upload_blob("imdb_movie_records.csv")
-    # database.upload_blob("imdb_dataset.csv")
+    # database.upload_blob("imdb_dataset.csv") #Replaced with "imdb_dataset_with_region.csv"
+    # database.upload_blob("tmdb_genre_list_dataset.csv")
+    # database.upload_blob("imdb_dataset_with_region.csv")
 
 
     

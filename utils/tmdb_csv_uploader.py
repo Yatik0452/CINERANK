@@ -50,3 +50,20 @@ class APICSVUploader:
                 item['imdb_id'] = imdb_id # Add imdb_id to each record
                 combined_data.append(item)
         APICSVUploader.convert_json_to_csv(combined_data, output_path)
+
+    @staticmethod
+    def get_tmdb_genre_list():
+        url = "https://api.themoviedb.org/3/genre/movie/list?language=en"
+        headers = {
+            "accept": "application/json",
+            "Authorization": f"Bearer {tmdb_api_token}"
+        }
+        response = requests.get(url, headers=headers)
+        print(response.text)
+        data = response.json()
+        return data.get("genres", [])
+
+    @staticmethod
+    def generate_tmdb_movie_csv(output_path: str = "./data/tmdb_genre_list_dataset.csv"):
+        genres = APICSVUploader.get_tmdb_genre_list()
+        APICSVUploader.convert_json_to_csv(genres, output_path)
