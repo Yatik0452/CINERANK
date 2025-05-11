@@ -95,24 +95,43 @@ class AzureDB():
         except Exception as ex:
             print('Exception:')
             print(ex)
-            
     
-    def upload_dataframe_sqldatabase(self, blob_name, blob_data):
+
+    def upload_dataframe_sqldatabase(self, blob_name, blob_data, primary_key_name=None):
         print("\nUploading to Azure SQL server as table:\n\t" + blob_name)
         blob_data.to_sql(blob_name, engine, if_exists='replace', index=False)
-        primary = blob_name.replace('dim', 'id')
-        if 'fact' in blob_name.lower():
-            with engine.connect() as con:
-                trans = con.begin()
-                con.execute(text(f'ALTER TABLE [dbo].[{blob_name}] alter column {blob_name}_id bigint NOT NULL'))
-                con.execute(text(f'ALTER TABLE [dbo].[{blob_name}] ADD CONSTRAINT [PK_{blob_name}] PRIMARY KEY CLUSTERED ([{blob_name}_id] ASC);'))
-                trans.commit() 
-        else:        
-            with engine.connect() as con:
-                trans = con.begin()
-                con.execute(text(f'ALTER TABLE [dbo].[{blob_name}] alter column {primary} bigint NOT NULL'))
-                con.execute(text(f'ALTER TABLE [dbo].[{blob_name}] ADD CONSTRAINT [PK_{blob_name}] PRIMARY KEY CLUSTERED ([{primary}] ASC);'))
-                trans.commit() 
+
+        # Check if the primary key column exists in the dataframe
+        if primary_key_name and primary_key_name not in blob_data.columns:
+            raise ValueError(f"Primary key column '{primary_key_name}' not found in '{blob_name}'")
+
+        with engine.connect() as con:
+            trans = con.begin()
+            
+
+            # Check for country_dim table to apply varchar
+            if blob_name.lower() == "country_dim" or blob_name.lower() == "movie_dim":
+                # Apply varchar data type for primary key in country_dim
+                con.execute(text(f'ALTER TABLE [dbo].[{blob_name}] ALTER COLUMN {primary_key_name} varchar(20) NOT NULL'))
+                # Add the primary key constraint
+                con.execute(text(f'ALTER TABLE [dbo].[{blob_name}] ADD CONSTRAINT [PK_{blob_name}] PRIMARY KEY CLUSTERED ([{primary_key_name}] ASC);'))
+            elif blob_name == "MovieGenreFact_dim":
+                # Make sure the composite key columns are NOT NULL first
+                con.execute(text('ALTER TABLE [dbo].[MovieGenreFact_dim] ALTER COLUMN MovieID VARCHAR(20) NOT NULL'))
+                con.execute(text('ALTER TABLE [dbo].[MovieGenreFact_dim] ALTER COLUMN GenreID INT NOT NULL'))
+                con.execute(
+                    text(f'ALTER TABLE [dbo].[{blob_name}]'
+                        f'ADD CONSTRAINT PK_MovieGenreFact PRIMARY KEY (MovieID, GenreID);')
+                )
+            else:
+                # Apply int/bigint data type for primary key in other dimension tables
+                con.execute(text(f'ALTER TABLE [dbo].[{blob_name}] ALTER COLUMN {primary_key_name} INT NOT NULL'))
+                 # Add the primary key constraint
+                con.execute(text(f'ALTER TABLE [dbo].[{blob_name}] ADD CONSTRAINT [PK_{blob_name}] PRIMARY KEY CLUSTERED ([{primary_key_name}] ASC);'))
+
+            trans.commit()
+
+
                 
     def append_dataframe_sqldatabase(self, blob_name, blob_data):
         print("\nAppending to table:\n\t" + blob_name)
