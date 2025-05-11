@@ -170,6 +170,8 @@ def etl_process(req: func.HttpRequest) -> func.HttpResponse:
         # Convert genre_ids to nullable Int64 (this will automatically handle NaN values)
         tmdb_df["genre_ids"] = tmdb_df["genre_ids"].astype("Int64")
 
+        
+
         # # Drop any rows where genre_ids is NaN (invalid genres)
         # tmdb_df = tmdb_df.dropna(subset=["genre_ids"])
 
@@ -198,20 +200,19 @@ def etl_process(req: func.HttpRequest) -> func.HttpResponse:
 
         # Create a region -> countryid mapping with fallback
         def resolve_country_id(region):
-             if pd.isna(region):
+            if pd.isna(region):
                 return None
-             return region.lower() if region.lower() in valid_country_ids else None
+            return region.lower() if region.lower() in valid_country_ids else None
 
         imdb_df["CountryID"] = imdb_df["region"].apply(resolve_country_id)
 
         # Select only necessary columns including numVotes (IMDb rating and votes)
         imdb_country_map = imdb_df[["tconst", "CountryID", "averageRating", "numVotes"]].drop_duplicates()
 
-        # Safely parse genre_ids as Python lists
+        # Safely parse genre_ids as Python lists (if not already done above)
         tmdb_df["genre_ids"] = tmdb_df["genre_ids"].apply(
             lambda x: ast.literal_eval(x) if pd.notnull(x) and isinstance(x, str) else []
-        
-)
+        )
 
         # Explode genre_ids for fact table
         movie_genre_fact_df = tmdb_df.explode("genre_ids").rename(
@@ -222,8 +223,17 @@ def etl_process(req: func.HttpRequest) -> func.HttpResponse:
                 "imdb_id": "tconst"
             }
         )
-        # Ensure GenreID is treated as an integer
-        movie_genre_fact_df["GenreID"] = movie_genre_fact_df["GenreID"].astype("Int64")
+
+        # Convert GenreID to string (VARCHAR-compatible) and strip whitespace
+        movie_genre_fact_df["GenreID"] = movie_genre_fact_df["GenreID"].astype(str).str.strip()
+
+        # Load valid GenreIDs from GenreDimension for FK enforcement
+        conn = get_sql_connection()
+        valid_genre_ids = pd.read_sql("SELECT GenreID FROM GenreDimension", conn)["GenreID"].astype(str).str.strip().tolist()
+        conn.close()
+
+        # Filter out rows with invalid GenreIDs
+        movie_genre_fact_df = movie_genre_fact_df[movie_genre_fact_df["GenreID"].isin(valid_genre_ids)]
 
         # Join TMDB data with IMDb data on tconst
         movie_genre_fact_df = pd.merge(movie_genre_fact_df, imdb_country_map, how="left", on="tconst")
@@ -231,7 +241,7 @@ def etl_process(req: func.HttpRequest) -> func.HttpResponse:
         # Drop rows without CountryID
         movie_genre_fact_df = movie_genre_fact_df.dropna(subset=["CountryID"])
 
-        # Extract ReleaseYear from release_date if needed
+        # Extract ReleaseYear from release_date
         movie_genre_fact_df["ReleaseYear"] = pd.to_datetime(movie_genre_fact_df["release_date"], errors="coerce").dt.year
 
         # Rename to match DB schema
@@ -240,17 +250,14 @@ def etl_process(req: func.HttpRequest) -> func.HttpResponse:
             "numVotes": "NumRatings"
         })
 
-        # Select final columns
+        # Select final columns in correct order
         movie_genre_fact_df = movie_genre_fact_df[[
             "MovieID", "GenreID", "Rating", "NumRatings", "ReleaseYear", "Popularity", "CountryID"
         ]]
 
-
-        # Log the columns to ensure ReleaseYear exists
-        logging.info(f"Columns in movie_genre_fact_df: {movie_genre_fact_df.columns}")
-
-        # Load the transformed DataFrame into the MovieGenreFact table
+        # Load into MovieGenreFact table
         transform_and_load(movie_genre_fact_df, "MovieGenreFact")
+
 
 
         return func.HttpResponse("ETL process completed successfully.", status_code=200)
