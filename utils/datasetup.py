@@ -17,6 +17,7 @@ server = os.environ.get('SERVER')
 database = os.environ.get('DATABASE')
 account_storage = os.environ.get('ACCOUNT_STORAGE')
 connect_str = os.getenv('AZURE_STORAGE_CONNECTION_STRING')
+tmdb_api_token = os.getenv('TMDB_API_READ_ACCESS_TOKEN')
 
 # Using pyodbc
 engine = create_engine(f'mssql+pyodbc://{username}:{password}@{server}/{database}?driver=ODBC+Driver+18+for+SQL+Server')
@@ -61,7 +62,7 @@ class AzureDB():
         else:
             # Upload the created file
             with open(file=upload_file_path, mode="rb") as data:
-                blob_client.upload_blob(data)
+                blob_client.upload_blob(data, overwrite=True)
                 
     def list_blobs(self):
         print("\nListing blobs...")
@@ -88,29 +89,49 @@ class AzureDB():
         try:
             print(f"Acessing blob {blob_name}")
             
-            df = pd.read_csv(io.StringIO(self.container_client.download_blob(blob_name).readall().decode('utf-8')))  
+            # df = pd.read_csv(io.StringIO(self.container_client.download_blob(blob_name).readall().decode('utf-8', errors='replace'))) #swap out chars that can't be decoded with a replacement char
+            df = pd.read_csv(io.StringIO(self.container_client.download_blob(blob_name).readall().decode('utf-8', errors='ignore')))  #ignore chars that can't be decoded
             return df      
         except Exception as ex:
             print('Exception:')
             print(ex)
-            
     
-    def upload_dataframe_sqldatabase(self, blob_name, blob_data):
+
+    def upload_dataframe_sqldatabase(self, blob_name, blob_data, primary_key_name=None):
         print("\nUploading to Azure SQL server as table:\n\t" + blob_name)
         blob_data.to_sql(blob_name, engine, if_exists='replace', index=False)
-        primary = blob_name.replace('dim', 'id')
-        if 'fact' in blob_name.lower():
-            with engine.connect() as con:
-                trans = con.begin()
-                con.execute(text(f'ALTER TABLE [dbo].[{blob_name}] alter column {blob_name}_id bigint NOT NULL'))
-                con.execute(text(f'ALTER TABLE [dbo].[{blob_name}] ADD CONSTRAINT [PK_{blob_name}] PRIMARY KEY CLUSTERED ([{blob_name}_id] ASC);'))
-                trans.commit() 
-        else:        
-            with engine.connect() as con:
-                trans = con.begin()
-                con.execute(text(f'ALTER TABLE [dbo].[{blob_name}] alter column {primary} bigint NOT NULL'))
-                con.execute(text(f'ALTER TABLE [dbo].[{blob_name}] ADD CONSTRAINT [PK_{blob_name}] PRIMARY KEY CLUSTERED ([{primary}] ASC);'))
-                trans.commit() 
+
+        # Check if the primary key column exists in the dataframe
+        if primary_key_name and primary_key_name not in blob_data.columns:
+            raise ValueError(f"Primary key column '{primary_key_name}' not found in '{blob_name}'")
+
+        with engine.connect() as con:
+            trans = con.begin()
+            
+
+            # Check for country_dim table to apply varchar
+            if blob_name.lower() == "country_dim" or blob_name.lower() == "movie_dim":
+                # Apply varchar data type for primary key in country_dim
+                con.execute(text(f'ALTER TABLE [dbo].[{blob_name}] ALTER COLUMN {primary_key_name} varchar(20) NOT NULL'))
+                # Add the primary key constraint
+                con.execute(text(f'ALTER TABLE [dbo].[{blob_name}] ADD CONSTRAINT [PK_{blob_name}] PRIMARY KEY CLUSTERED ([{primary_key_name}] ASC);'))
+            elif blob_name == "MovieGenreFact_dim":
+                # Make sure the composite key columns are NOT NULL first
+                con.execute(text('ALTER TABLE [dbo].[MovieGenreFact_dim] ALTER COLUMN MovieID VARCHAR(20) NOT NULL'))
+                con.execute(text('ALTER TABLE [dbo].[MovieGenreFact_dim] ALTER COLUMN GenreID INT NOT NULL'))
+                con.execute(
+                    text(f'ALTER TABLE [dbo].[{blob_name}]'
+                        f'ADD CONSTRAINT PK_MovieGenreFact PRIMARY KEY (MovieID, GenreID);')
+                )
+            else:
+                # Apply int/bigint data type for primary key in other dimension tables
+                con.execute(text(f'ALTER TABLE [dbo].[{blob_name}] ALTER COLUMN {primary_key_name} INT NOT NULL'))
+                 # Add the primary key constraint
+                con.execute(text(f'ALTER TABLE [dbo].[{blob_name}] ADD CONSTRAINT [PK_{blob_name}] PRIMARY KEY CLUSTERED ([{primary_key_name}] ASC);'))
+
+            trans.commit()
+
+
                 
     def append_dataframe_sqldatabase(self, blob_name, blob_data):
         print("\nAppending to table:\n\t" + blob_name)
